@@ -1,0 +1,28 @@
+services:
+  api:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      JWT_ACCESS_SECRET: change-me-access
+      JWT_REFRESH_SECRET: change-me-refresh
+      # Para o caminho com Prisma/PostgreSQL, descomente:
+      # DATABASE_URL: postgresql://postgres:postgres@db:5432/app?schema=public
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
