@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
+import { env } from '../env';
 
 export type Role = 'ADMIN' | 'USER';
 
@@ -59,14 +60,24 @@ class InMemoryUserRepository implements UserRepository {
 
 export const userRepository: UserRepository = new InMemoryUserRepository();
 
-/** Cria um admin inicial (idempotente). */
-export async function seedAdmin() {
-  const existing = await userRepository.findByEmail('admin@example.com');
-  if (existing) return;
-  await userRepository.create({
+/**
+ * Cria um admin inicial (idempotente). Só executa quando SEED_ADMIN=true e as
+ * credenciais vêm de SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD (nada hardcoded).
+ * Retorna o admin (público) quando semeia/já existe, ou null quando desativado.
+ */
+export async function seedAdmin(): Promise<PublicUser | null> {
+  if (!env.SEED_ADMIN) return null;
+  const { SEED_ADMIN_EMAIL: email, SEED_ADMIN_PASSWORD: password } = env;
+  if (!email || !password) {
+    throw new Error('SEED_ADMIN=true exige SEED_ADMIN_EMAIL e SEED_ADMIN_PASSWORD.');
+  }
+  const existing = await userRepository.findByEmail(email);
+  if (existing) return toPublic(existing);
+  const user = await userRepository.create({
     name: 'Admin',
-    email: 'admin@example.com',
-    passwordHash: await hashPassword('admin123'),
+    email,
+    passwordHash: await hashPassword(password),
     role: 'ADMIN',
   });
+  return toPublic(user);
 }

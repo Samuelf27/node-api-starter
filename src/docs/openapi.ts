@@ -39,7 +39,10 @@ export const openapiSpec = {
       },
     },
     '/auth/refresh': {
-      post: { tags: ['Auth'], summary: 'Renova o access token a partir do refresh token', responses: { 200: { description: 'Novos tokens' } } },
+      post: { tags: ['Auth'], summary: 'Renova (e rotaciona) os tokens a partir do refresh token', responses: { 200: { description: 'Novos tokens' }, 401: { description: 'Refresh token inválido/rotacionado' } } },
+    },
+    '/auth/logout': {
+      post: { tags: ['Auth'], summary: 'Revoga o refresh token do chamador', responses: { 204: { description: 'Revogado' } } },
     },
     '/auth/me': {
       get: { tags: ['Auth'], summary: 'Dados do usuário autenticado', security: [{ bearerAuth: [] }], responses: { 200: { description: 'OK' }, 401: { description: 'Não autenticado' } } },

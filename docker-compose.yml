@@ -6,8 +6,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      JWT_ACCESS_SECRET: change-me-access
-      JWT_REFRESH_SECRET: change-me-refresh
+      # Gere segredos fortes (≥ 32 chars) antes de subir em produção:
+      #   openssl rand -hex 32
+      # A API falha ao iniciar com estes placeholders — substitua-os.
+      JWT_ACCESS_SECRET: CHANGE_ME
+      JWT_REFRESH_SECRET: CHANGE_ME
       # Para o caminho com Prisma/PostgreSQL, descomente:
       # DATABASE_URL: postgresql://postgres:postgres@db:5432/app?schema=public
     depends_on:

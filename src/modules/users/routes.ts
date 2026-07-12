@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, notFound } from '../../lib/errors';
+import { asyncHandler, notFound, conflict } from '../../lib/errors';
 import { authenticate, authorize } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validate';
 import { userRepository, toPublic } from '../../db/repository';
@@ -37,6 +37,13 @@ userRoutes.patch(
   '/:id',
   validateBody(updateSchema),
   asyncHandler(async (req, res) => {
+    // Impede atualizar para um e-mail já usado por outro usuário.
+    if (req.body.email) {
+      const existing = await userRepository.findByEmail(req.body.email);
+      if (existing && existing.id !== req.params.id) {
+        throw conflict('E-mail já cadastrado.');
+      }
+    }
     const user = await userRepository.update(req.params.id, req.body);
     if (!user) throw notFound('Usuário não encontrado.');
     res.json(toPublic(user));

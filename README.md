@@ -10,7 +10,7 @@ Boilerplate de <b>API REST em produção</b> com TypeScript — autenticação J
   <img src="https://img.shields.io/badge/JWT-000000?style=flat&logo=jsonwebtokens&logoColor=white"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white"/>
   <img src="https://github.com/Samuelf27/node-api-starter/actions/workflows/ci.yml/badge.svg"/>
-  <img src="https://img.shields.io/badge/tests-14%20passing-34d399?style=flat"/>
+  <img src="https://img.shields.io/badge/tests-20%20passing-34d399?style=flat"/>
 </p>
 
 ---
@@ -21,12 +21,14 @@ Um ponto de partida **pronto para produção** para APIs Node.js — resolvendo 
 
 ## ✨ O que vem pronto
 
-- 🔑 **Autenticação JWT** com **access + refresh token**
+- 🔑 **Autenticação JWT** com **access + refresh token** e **rotação + revogação** (logout)
 - 🛡️ **RBAC** — autorização por papéis (`ADMIN`, `USER`)
 - 🔒 Senhas com **bcrypt**
+- 🪖 **Helmet** (headers de segurança) + **CORS** por origem configurável
+- 🚦 **Rate limiting** nas rotas de autenticação (`express-rate-limit`)
 - ✅ **Validação** de entrada com **Zod** (erros 400 estruturados)
 - 📚 **Swagger UI** em `/docs` (OpenAPI 3)
-- 🧪 **14 testes de integração** (Vitest + Supertest)
+- 🧪 **20 testes de integração** (Vitest + Supertest)
 - 🐳 **Docker** + **docker-compose** (com PostgreSQL)
 - ⚙️ **CI** no GitHub Actions (typecheck + testes + build)
 - 🧱 Arquitetura modular (config, lib, middleware, modules)
@@ -37,7 +39,8 @@ Um ponto de partida **pronto para produção** para APIs Node.js — resolvendo 
 |---|---|---|---|
 | `POST` | `/api/auth/register` | — | Cria conta (retorna tokens) |
 | `POST` | `/api/auth/login` | — | Login (retorna tokens) |
-| `POST` | `/api/auth/refresh` | — | Renova o access token |
+| `POST` | `/api/auth/refresh` | — | Renova e **rotaciona** os tokens |
+| `POST` | `/api/auth/logout` | — | Revoga o refresh token informado |
 | `GET` | `/api/auth/me` | Bearer | Dados do usuário logado |
 | `GET` | `/api/users` | ADMIN | Lista usuários |
 | `GET` | `/api/users/:id` | ADMIN | Detalhe |
@@ -49,25 +52,49 @@ Um ponto de partida **pronto para produção** para APIs Node.js — resolvendo 
 
 ```bash
 npm install
-cp .env.example .env
+cp .env.example .env   # gere segredos JWT fortes: openssl rand -hex 32
 npm run dev        # http://localhost:3000  (docs em /docs)
-npm test           # 14 testes de integração
+npm test           # 20 testes de integração
 npm run build      # bundle de produção (tsup)
 ```
 
-🔑 Admin pré-cadastrado: **admin@example.com / admin123**
+> ⚠️ **Segredos JWT são obrigatórios.** Em `production` a aplicação **falha ao iniciar**
+> se `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` estiverem ausentes, com menos de 32
+> caracteres ou usando placeholders conhecidos. Em dev/test, um segredo efêmero é
+> gerado automaticamente (com aviso) e os tokens são invalidados a cada reinício.
+
+### 🔑 Admin (seed opcional)
+
+Não há admin pré-cadastrado por padrão. Para semear um, defina no `.env`:
+
+```bash
+SEED_ADMIN=true
+SEED_ADMIN_EMAIL=admin@example.com
+SEED_ADMIN_PASSWORD=uma-senha-forte
+```
+
+O seed é ignorado quando `SEED_ADMIN` não é `true`, e as credenciais nunca são
+impressas em produção.
+
+### 🔁 Refresh tokens (rotação + revogação)
+
+`/api/auth/refresh` valida o refresh token, **invalida o token usado** e emite um novo
+par (rotação). Reutilizar um refresh token já rotacionado retorna `401`. `/api/auth/logout`
+revoga o refresh token informado. Os `jti` válidos ficam num **store em memória** que,
+como o repositório de usuários, **é reiniciado a cada restart do processo** — troque por
+Redis/banco numa implementação real.
 
 ### Com Docker
 ```bash
-docker compose up --build
+docker compose up --build   # ajuste os segredos JWT no docker-compose.yml antes
 ```
 
 ### Exemplo
 ```bash
-# login
+# login (use as credenciais do seu seed, se habilitado)
 curl -X POST localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"admin123"}'
+  -d '{"email":"admin@example.com","password":"uma-senha-forte"}'
 
 # usar o token
 curl localhost:3000/api/auth/me -H "Authorization: Bearer <accessToken>"

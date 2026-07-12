@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { createApp } from '../src/app';
 import { seedAdmin } from '../src/db/repository';
+import { env } from '../src/env';
 
 const app = createApp();
 
@@ -79,6 +81,59 @@ describe('Auth', () => {
     const res = await request(app).post('/api/auth/refresh').send({ refreshToken: userTokens.refreshToken });
     expect(res.status).toBe(200);
     expect(res.body.accessToken).toBeTruthy();
+    // Rotação: o refresh anterior foi invalidado; mantém o novo para próximos testes.
+    userTokens.refreshToken = res.body.refreshToken;
+  });
+});
+
+describe('Refresh token: rotação e revogação', () => {
+  let tokens: { accessToken: string; refreshToken: string };
+
+  beforeAll(async () => {
+    const res = await request(app).post('/api/auth/register').send({
+      name: 'Rotação Teste', email: 'rotacao@example.com', password: 'senha123',
+    });
+    tokens = res.body;
+  });
+
+  it('rejeita refresh token forjado/inválido (401)', async () => {
+    const res = await request(app).post('/api/auth/refresh').send({ refreshToken: 'x'.repeat(40) });
+    expect(res.status).toBe(401);
+  });
+
+  it('rotaciona e invalida o refresh antigo ao reutilizá-lo (401)', async () => {
+    const first = await request(app).post('/api/auth/refresh').send({ refreshToken: tokens.refreshToken });
+    expect(first.status).toBe(200);
+    expect(first.body.refreshToken).toBeTruthy();
+    expect(first.body.refreshToken).not.toBe(tokens.refreshToken);
+
+    // Reutilizar o refresh já rotacionado deve falhar.
+    const reuse = await request(app).post('/api/auth/refresh').send({ refreshToken: tokens.refreshToken });
+    expect(reuse.status).toBe(401);
+
+    tokens.refreshToken = first.body.refreshToken;
+  });
+
+  it('logout revoga o refresh token (401 no refresh seguinte)', async () => {
+    const logout = await request(app).post('/api/auth/logout').send({ refreshToken: tokens.refreshToken });
+    expect(logout.status).toBe(204);
+
+    const res = await request(app).post('/api/auth/refresh').send({ refreshToken: tokens.refreshToken });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('Access token: hardening', () => {
+  it('rejeita access token forjado com segredo errado (401)', async () => {
+    const forged = jwt.sign({ sub: 'x', role: 'ADMIN' }, 'segredo-errado');
+    const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${forged}`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejeita access token expirado (401)', async () => {
+    const expired = jwt.sign({ sub: 'x', role: 'USER' }, env.JWT_ACCESS_SECRET, { expiresIn: -10 });
+    const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${expired}`);
+    expect(res.status).toBe(401);
   });
 });
 
@@ -111,5 +166,18 @@ describe('RBAC + CRUD de usuários', () => {
     expect(del.status).toBe(204);
     const get = await request(app).get(`/api/users/${userId}`).set('Authorization', `Bearer ${adminToken}`);
     expect(get.status).toBe(404);
+  });
+
+  it('PATCH rejeita e-mail já usado por outro usuário (409)', async () => {
+    const a = await request(app).post('/api/auth/register').send({ name: 'User A', email: 'usera@example.com', password: 'senha123' });
+    const b = await request(app).post('/api/auth/register').send({ name: 'User B', email: 'userb@example.com', password: 'senha123' });
+    expect(a.status).toBe(201);
+    expect(b.status).toBe(201);
+
+    const res = await request(app)
+      .patch(`/api/users/${b.body.user.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ email: 'usera@example.com' });
+    expect(res.status).toBe(409);
   });
 });
