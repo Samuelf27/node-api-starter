@@ -23,9 +23,9 @@ Um ponto de partida **pronto para produção** para APIs Node.js — resolvendo 
 
 - 🔑 **Autenticação JWT** com **access + refresh token** e **rotação + revogação** (logout)
 - 🛡️ **RBAC** — autorização por papéis (`ADMIN`, `USER`)
-- 🔒 Senhas com **bcrypt**
+- 🔒 Senhas com **bcrypt** (via `bcryptjs`)
 - 🪖 **Helmet** (headers de segurança) + **CORS** por origem configurável
-- 🚦 **Rate limiting** nas rotas de autenticação (`express-rate-limit`)
+- 🚦 **Rate limiting** nas rotas sensíveis de autenticação (register/login/refresh) (`express-rate-limit`)
 - ✅ **Validação** de entrada com **Zod** (erros 400 estruturados)
 - 📚 **Swagger UI** em `/docs` (OpenAPI 3)
 - 🧪 **20 testes de integração** (Vitest + Supertest)
@@ -120,7 +120,7 @@ src/
 ├── lib/                   # jwt, password, errors
 ├── db/repository.ts       # camada de dados (plugável)
 ├── middleware/            # auth, authorize (RBAC), validate, errors
-├── modules/auth/          # register, login, refresh, me
+├── modules/auth/          # register, login, refresh, logout, me
 ├── modules/users/         # CRUD com RBAC
 └── docs/openapi.ts        # spec OpenAPI
 ```
