@@ -125,6 +125,23 @@ src/
 └── docs/openapi.ts        # spec OpenAPI
 ```
 
+## 🧪 Testes
+
+**20 testes** de integração HTTP (Vitest), rodando no CI a cada push e pull request.
+
+A suíte exercita a API pelo endpoint, não por unidade isolada — cobrindo o caminho feliz e, principalmente, os códigos de erro:
+
+- Registro de usuário e emissão de tokens
+- E-mail duplicado → `409`
+- Corpo inválido (senha curta) → `400`
+- Login correto e senha errada → `401`
+- Rota autenticada com e sem token → dados do usuário / `401`
+- `GET /health`
+
+```bash
+npm test
+```
+
 ## 📄 Licença
 
 [MIT](LICENSE) © Samuel Ferreira
