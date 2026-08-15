@@ -1,0 +1,52 @@
+name: Reportar bug
+description: Algo não funciona como deveria
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Se for uma **vulnerabilidade de segurança**, não use este formulário —
+        veja o [SECURITY.md](../blob/main/SECURITY.md) e use o canal privado.
+
+  - type: textarea
+    id: oque
+    attributes:
+      label: O que acontece
+      description: Descreva o comportamento observado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que era esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Como reproduzir
+      description: Passos, ou um trecho de código mínimo que reproduza o problema.
+      placeholder: |
+        1. Chamar isValidCPF('...')
+        2. Retorna false
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: versao
+    attributes:
+      label: Versão do pacote
+      placeholder: "1.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: ambiente
+    attributes:
+      label: Ambiente
+      placeholder: "Node 22.4.0, Windows 11"
+    validations:
+      required: false
