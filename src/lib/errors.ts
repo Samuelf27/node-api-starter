@@ -15,7 +15,14 @@ export const notFound = (m = 'Recurso não encontrado.') => new HttpError(404, m
 export const conflict = (m: string) => new HttpError(409, m);
 
 /** Envolve handlers async para encaminhar erros ao middleware de erro. */
+// Generico para deixar o tipo dos params atravessar o wrapper: no Express 5,
+// `req.params` de um `Request` cru e `string | string[]` (wildcards `*nome`
+// podem produzir arrays), e as rotas com `:id` precisam declarar
+// `Request<{ id: string }>` para receber `string` — sem o generico, o wrapper
+// apagava essa informacao.
 export const asyncHandler =
-  (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
-  (req: Request, res: Response, next: NextFunction) =>
+  <Req extends Request = Request>(
+    fn: (req: Req, res: Response, next: NextFunction) => Promise<unknown>,
+  ) =>
+  (req: Req, res: Response, next: NextFunction) =>
     Promise.resolve(fn(req, res, next)).catch(next);
