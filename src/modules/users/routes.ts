@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { z } from 'zod';
 import { asyncHandler, notFound, conflict } from '../../lib/errors';
 import { authenticate, authorize } from '../../middleware/auth';
@@ -26,7 +27,7 @@ userRoutes.get(
 
 userRoutes.get(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler<Request<{ id: string }>>(async (req, res) => {
     const user = await userRepository.findById(req.params.id);
     if (!user) throw notFound('Usuário não encontrado.');
     res.json(toPublic(user));
@@ -36,7 +37,7 @@ userRoutes.get(
 userRoutes.patch(
   '/:id',
   validateBody(updateSchema),
-  asyncHandler(async (req, res) => {
+  asyncHandler<Request<{ id: string }>>(async (req, res) => {
     // Impede atualizar para um e-mail já usado por outro usuário.
     if (req.body.email) {
       const existing = await userRepository.findByEmail(req.body.email);
@@ -52,7 +53,7 @@ userRoutes.patch(
 
 userRoutes.delete(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler<Request<{ id: string }>>(async (req, res) => {
     const ok = await userRepository.delete(req.params.id);
     if (!ok) throw notFound('Usuário não encontrado.');
     res.status(204).send();
