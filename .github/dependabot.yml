@@ -1,0 +1,38 @@
+# Atualizacoes automaticas de dependencias.
+#
+# Estrategia deliberada: agrupar. Um PR por mes com todos os bumps de minor e
+# patch juntos, em vez de um PR por pacote. Atualizacoes de major ficam em PRs
+# separados, porque exigem leitura de changelog.
+#
+# Alertas de seguranca continuam chegando na hora, independentemente deste
+# arquivo — este agendamento cobre apenas as atualizacoes de versao de rotina.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    groups:
+      minor-e-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Mantem as actions atualizadas. E o que evita ficar preso em versoes que
+  # dependem de runtimes de Node ja descontinuados nos runners.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
